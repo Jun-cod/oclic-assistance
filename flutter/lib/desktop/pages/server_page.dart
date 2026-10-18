@@ -1,6 +1,7 @@
 // original cm window in Sciter version.
 
 import 'dart:async';
+import 'oclic_assistance.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -175,6 +176,7 @@ class ConnectionManagerState extends State<ConnectionManager>
   @override
   Widget build(BuildContext context) {
     final serverModel = Provider.of<ServerModel>(context);
+    if (isOclic) return OclicConnectionPanel(model: serverModel);
     pointerHandler(PointerEvent e) {
       if (serverModel.cmHiddenTimer != null) {
         serverModel.cmHiddenTimer!.cancel();

@@ -159,7 +159,14 @@ flutter:
     - assets/
 
   fonts:
+    - family: OclicNunito
+      fonts:
+        - asset: assets/oclic-nunito.ttf
+    - family: OclicFredoka
+      fonts:
+        - asset: assets/oclic-fredoka.ttf
     - family: GestureIcons
+
       fonts:
         - asset: assets/gestures.ttf
     - family: Tabbar

@@ -35,6 +35,8 @@ pub fn core_main() -> Option<Vec<String>> {
     }
     crate::load_custom_client();
     #[cfg(windows)]
+    crate::oclic::configure();
+    #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
         // return None to terminate the process
         return None;

@@ -3056,3 +3056,11 @@ pub mod server_side {
         jboolean::from(crate::server::is_clipboard_service_ok())
     }
 }
+
+/// Shut down the Oclic engine, including all incoming sessions.
+pub async fn main_oclic_shutdown() -> bool {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    { crate::oclic::shutdown().await }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    { false }
+}

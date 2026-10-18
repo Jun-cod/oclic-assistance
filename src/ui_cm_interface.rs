@@ -262,6 +262,25 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             in_voice_call: false,
             incoming_voice_call: false,
         };
+        #[cfg(windows)]
+        if crate::get_app_name() == "OclicAssistance" {
+            let mut clients = CLIENTS.write().unwrap();
+            if client.is_file_transfer || client.is_view_camera || client.is_terminal
+                || !client.port_forward.is_empty()
+                || clients.iter().any(|(other_id, other)| *other_id != id && !other.disconnected)
+            {
+                drop(clients);
+                if let Err(error) = client.tx.send(Data::Close) {
+                    log::trace!("Oclic could not reject an extra connection: {}", error);
+                }
+                return;
+            }
+            clients.retain(|_, c| !(c.disconnected && c.peer_id == client.peer_id));
+            clients.insert(id, client.clone());
+            drop(clients);
+            self.ui_handler.add_connection(&client);
+            return;
+        }
         CLIENTS
             .write()
             .unwrap()

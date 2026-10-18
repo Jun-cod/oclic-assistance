@@ -13,6 +13,8 @@ src/oclic.rs defines server settings and native shutdown; flutter_ffi.rs exposes
 desktop_tab_page.dart and server_page.dart render the Oclic views while retaining
 the native connection-manager models; consts.dart sets the connection-window size;
 pubspec.yaml and Windows resources load the supplied branding assets.
+ui_cm_interface.rs enforces a single native screen-control connection;
+Oclic approval and stop controls stay visible even in a short window.
 Other source changes are limited to the build workflow and licence/font notices.
 
 Source and upstream licence: https://github.com/Jun-cod/oclic-assistance/tree/oclic-v1

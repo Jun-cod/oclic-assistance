@@ -31,8 +31,9 @@ class OclicLogo extends StatelessWidget {
 class OclicFrame extends StatelessWidget {
   final String status;
   final Widget child;
+  final Widget actions;
   final VoidCallback onClose;
-  const OclicFrame({super.key, required this.status, required this.child, required this.onClose});
+  const OclicFrame({super.key, required this.status, required this.child, required this.actions, required this.onClose});
   @override
   Widget build(BuildContext context) => Theme(
     data: ThemeData(brightness: Brightness.light, fontFamily: 'OclicNunito',
@@ -60,7 +61,10 @@ class OclicFrame extends StatelessWidget {
             child: Text(status, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: oclicInk))),
         ]),
         const SizedBox(height: 24), child,
-        const SizedBox(height: 30), const Divider(color: oclicInk),
+      ])))),
+      Padding(padding: const EdgeInsets.fromLTRB(28, 12, 28, 0), child: actions),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 28), child: Column(children: [
+        const Divider(color: oclicInk),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('BAOU TECHNOLOGIE', style: TextStyle(fontSize: 10, color: oclicInk)),
           TextButton(onPressed: () => showDialog<void>(context: context, builder: (context) => AlertDialog(
@@ -69,7 +73,7 @@ class OclicFrame extends StatelessWidget {
             actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))])),
             child: const Text('À propos', style: TextStyle(fontSize: 12))),
         ]),
-      ])))),
+      ])),
     ]))),
   );
 }
@@ -136,6 +140,7 @@ class _OclicMainWindowState extends State<OclicMainWindow> with WindowListener {
   void dispose() { timer?.cancel(); windowManager.removeListener(this); super.dispose(); }
   @override
   Widget build(BuildContext context) => OclicFrame(status: closing ? 'Arrêt en cours' : online ? 'Prêt' : 'Connexion…', onClose: quit,
+    actions: ElevatedButton(onPressed: closing ? null : quit, child: Text(closing ? 'Déconnexion…' : 'Arrêter l’assistance')),
     child: Column(children: [
       const Icon(Icons.desktop_windows_outlined, size: 48, color: oclicInk), const SizedBox(height: 20),
       oclicTitle('Votre identifiant'), const SizedBox(height: 12),
@@ -144,8 +149,6 @@ class _OclicMainWindowState extends State<OclicMainWindow> with WindowListener {
       TextButton.icon(onPressed: id.isEmpty ? null : () async { await Clipboard.setData(ClipboardData(text: id)); },
         icon: const Icon(Icons.copy_outlined, size: 16), label: const Text('Copier l’identifiant')),
       if (error.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(error, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: oclicInk))),
-      const SizedBox(height: 24),
-      ElevatedButton(onPressed: closing ? null : quit, child: Text(closing ? 'Déconnexion…' : 'Arrêter l’assistance')),
     ]));
 }
 
@@ -181,17 +184,10 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
     final Client? client = clients.isEmpty ? null : clients.first;
     final active = client?.authorized ?? false;
     return OclicFrame(status: closing ? 'Arrêt en cours' : active ? 'En cours' : 'Demande reçue', onClose: stop,
-      child: Column(children: [
-        Icon(active ? Icons.check_circle_outline : Icons.desktop_access_disabled_outlined, size: 48, color: oclicInk),
-        const SizedBox(height: 20), oclicTitle(active ? 'Le technicien intervient' : 'Autoriser l’assistance ?'),
-        const SizedBox(height: 12),
-        Text(active ? 'Écran, clavier et souris partagés.' : 'Vérifiez cet identifiant avec Oclic.', textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: oclicInk)),
-        const SizedBox(height: 24), oclicIdentity('Identifiant du poste distant', client?.peerId ?? ''),
-        const SizedBox(height: 24),
+      actions: Column(children: [
         if (error.isNotEmpty) Text(error, style: const TextStyle(color: oclicInk)),
         if (!active && client != null) ...[
-          ElevatedButton(onPressed: approving != null || closing ? null : () => checkClickTime(client.id, () async {
+          ElevatedButton(onPressed: approving == client.id || closing ? null : () => checkClickTime(client.id, () async {
             setState(() { approving = client.id; });
             // The native Login event, not this click, changes the authorized state.
             await bind.cmLoginRes(connId: client.id, res: true);
@@ -202,6 +198,14 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
           TextButton(onPressed: () => checkClickTime(client.id, () async {
             await bind.cmElevatePortable(connId: client.id);
           }), child: const Text('Autoriser les actions administrateur')),
+      ]),
+      child: Column(children: [
+        Icon(active ? Icons.check_circle_outline : Icons.desktop_access_disabled_outlined, size: 48, color: oclicInk),
+        const SizedBox(height: 20), oclicTitle(active ? 'Le technicien intervient' : 'Autoriser l’assistance ?'),
+        const SizedBox(height: 12),
+        Text(active ? 'Écran, clavier et souris partagés.' : 'Vérifiez cet identifiant avec Oclic.', textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 14, color: oclicInk)),
+        const SizedBox(height: 24), oclicIdentity('Identifiant du poste distant', client?.peerId ?? ''),
       ]));
   }
 }

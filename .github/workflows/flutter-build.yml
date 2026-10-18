@@ -129,6 +129,18 @@ jobs:
     - name: Check Oclic UI
       run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
       working-directory: flutter
+    - name: Resolve Oclic Flutter dependencies
+      run: flutter pub get
+      working-directory: flutter
+    - name: Check Oclic UI
+      run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
+      working-directory: flutter
+    - name: Resolve Oclic Flutter dependencies
+      run: flutter pub get
+      working-directory: flutter
+    - name: Check Oclic UI
+      run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
+      working-directory: flutter
     - name: Patch RustDesk sources for Flutter 3.44 (arm64)
       if: ${{ matrix.job.arch == 'aarch64' }}
       shell: bash
@@ -180,6 +192,8 @@ jobs:
         \ {\n      Write-Output \"rustdesk_printer_driver_v4-1.4, checksums do not match, ignore the file.\"\n  } else {\n      Write-Output \"\
         printer_driver_adapter.dll, checksums do not match, ignore the file.\"\n  }\n} catch {\n    Write-Host \"Ingore the printer driver error.\"\
         \n}\n"
+    - name: Verify native Oclic configuration
+      run: cargo test --release --lib --features flutter,hwcodec oclic::tests -- --test-threads=1
     - name: find Runner.res
       continue-on-error: true
       shell: bash
@@ -213,7 +227,7 @@ jobs:
 
         cp LICENCE OCLIC-BUILD.md OFL-Fredoka.txt OFL-Nunito.txt SignOutput/
 
-        sha256sum SignOutput/Oclic-Assistance.exe > SignOutput/SHA256SUMS
+        (cd SignOutput && sha256sum Oclic-Assistance.exe > SHA256SUMS)
 
         git rev-parse HEAD > SignOutput/SOURCE-COMMIT.txt
 
@@ -230,4 +244,4 @@ permissions:
   contents: read
 concurrency:
   group: oclic-windows-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false

@@ -48,7 +48,10 @@ pub fn configure() {
 pub async fn shutdown() -> bool {
     let mut stream = match crate::ipc::connect(1000, "").await {
         Ok(stream) => stream,
-        Err(_) => return true,
+        Err(error) => {
+            log::error!("Oclic could not contact its engine for shutdown: {}", error);
+            return false;
+        }
     };
     if let Err(error) = stream.send(&crate::ipc::Data::Close).await {
         log::error!("Oclic could not send shutdown: {}", error);

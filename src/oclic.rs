@@ -29,6 +29,8 @@ pub fn configure() {
         ("enable-terminal", "N"),
         ("enable-tunnel", "N"),
         ("enable-record-session", "N"),
+        ("enable-privacy-mode", "N"),
+        ("enable-block-input", "N"),
         ("direct-server", "N"),
         ("allow-remote-config-modification", "N"),
     ] {
@@ -64,7 +66,7 @@ mod tests {
         assert_eq!(hbb_common::config::Config::get_option("approve-mode"), "click");
         assert!(hbb_common::config::is_incoming_only());
         assert!(hbb_common::config::is_disable_installation());
-        for key in ["enable-file-transfer", "enable-clipboard", "enable-terminal", "enable-tunnel"] {
+        for key in ["enable-file-transfer", "enable-clipboard", "enable-terminal", "enable-tunnel", "enable-privacy-mode", "enable-block-input"] {
             assert_eq!(hbb_common::config::Config::get_option(key), "N");
         }
     }

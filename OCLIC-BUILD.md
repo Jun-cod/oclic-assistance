@@ -15,6 +15,8 @@ the native connection-manager models; consts.dart sets the connection-window siz
 pubspec.yaml and Windows resources load the supplied branding assets.
 ui_cm_interface.rs enforces a single native screen-control connection;
 Oclic approval and stop controls stay visible even in a short window.
+server_model.dart skips automatic minimization for Oclic; the connection window's
+system close control requests native shutdown while a peer is present.
 Other source changes are limited to the build workflow and licence/font notices.
 
 Source and upstream licence: https://github.com/Jun-cod/oclic-assistance/tree/oclic-v1

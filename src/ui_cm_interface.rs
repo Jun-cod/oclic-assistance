@@ -265,9 +265,10 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
         #[cfg(windows)]
         if crate::get_app_name() == "OclicAssistance" {
             let mut clients = CLIENTS.write().unwrap();
-            if client.is_file_transfer || client.is_view_camera || client.is_terminal
+            if client.is_view_camera || client.is_terminal
                 || !client.port_forward.is_empty()
-                || clients.iter().any(|(other_id, other)| *other_id != id && !other.disconnected)
+                || clients.iter().any(|(other_id, other)| *other_id != id && !other.disconnected
+                    && !crate::oclic::can_pair_channels(&client.peer_id, client.is_file_transfer, &other.peer_id, other.is_file_transfer))
             {
                 drop(clients);
                 if let Err(error) = client.tx.send(Data::Close) {

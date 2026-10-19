@@ -25,6 +25,18 @@ void main() {
     ]), isNull);
   });
 
+  test('An authorized file channel works without video and cannot authorize another request', () {
+    final clients = [
+      {'id': 17, 'authorized': true, 'disconnected': false, 'is_file_transfer': true},
+      {'id': 18, 'authorized': false, 'disconnected': false, 'is_file_transfer': true},
+    ];
+    expect(oclicActiveConnectionId(17, 0, clients), 17);
+    expect(oclicActiveConnectionId(18, 1, clients), isNull);
+    expect(oclicActiveConnectionId(17, 0, [
+      {'id': 17, 'authorized': true, 'disconnected': true, 'is_file_transfer': true},
+    ]), isNull);
+  });
+
   testWidgets('The shared minimize control requests minimization without closing assistance', (tester) async {
     final calls = <String>[];
     var closed = false;

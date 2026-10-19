@@ -17,9 +17,10 @@ const oclicSun = Color(0xffffd33f);
 bool get isOclic => bind.mainGetAppNameSync() == 'OclicAssistance';
 
 int? oclicActiveConnectionId(int? requestedId, int streamCount, List<dynamic> nativeClients) {
-  if (requestedId == null || streamCount < 1) return null;
+  if (requestedId == null) return null;
   return nativeClients.any((client) => client is Map && client['id'] == requestedId
-      && client['authorized'] == true && client['disconnected'] != true) ? requestedId : null;
+      && client['authorized'] == true && client['disconnected'] != true
+      && (client['is_file_transfer'] == true || streamCount > 0)) ? requestedId : null;
 }
 
 class OclicLogo extends StatelessWidget {
@@ -77,7 +78,7 @@ class OclicFrame extends StatelessWidget {
           const Text('BAOU TECHNOLOGIE', style: TextStyle(fontSize: 10, color: oclicInk)),
           TextButton(onPressed: () => showDialog<void>(context: context, builder: (context) => AlertDialog(
             title: const Text('Oclic Assistance'),
-            content: const Text('Version 0.1.1 · RustDesk 1.5.0\nLogiciel libre, licence AGPL-3.0.\nSources : github.com/Jun-cod/oclic-assistance'),
+            content: const Text('Version 0.1.2 · RustDesk 1.5.0\nLogiciel libre, licence AGPL-3.0.\nSources : github.com/Jun-cod/oclic-assistance'),
             actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))])),
             child: const Text('À propos', style: TextStyle(fontSize: 12))),
         ]),
@@ -174,6 +175,7 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
   Timer? timer;
   int? approving;
   int? activeConnectionId;
+  int? activeFileConnectionId;
   bool closing = false, fetching = false;
   String error = '';
   @override
@@ -192,12 +194,17 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
     try {
       final nativeClients = jsonDecode(await bind.cmGetClientsState()) as List<dynamic>;
       final status = jsonDecode(await bind.mainGetConnectStatus()) as Map<String, dynamic>;
-      final clients = widget.model.clients.where((client) => !client.disconnected);
-      final id = clients.isEmpty ? null : clients.first.id;
+      final clients = widget.model.clients.where((client) => !client.disconnected).toList();
+      final screens = clients.where((client) => !client.isFileTransfer);
+      final files = clients.where((client) => client.isFileTransfer);
+      final id = screens.isEmpty ? null : screens.first.id;
       final nextId = oclicActiveConnectionId(id, (status['video_conn_count'] as num? ?? 0).toInt(), nativeClients);
-      if (mounted && nextId != activeConnectionId) {
-        setState(() { activeConnectionId = nextId; });
-        if (nextId != null) {
+      final nextFileId = oclicActiveConnectionId(files.isEmpty ? null : files.first.id, 0, nativeClients);
+      if (mounted && (nextId != activeConnectionId || nextFileId != activeFileConnectionId)) {
+        final started = (nextId != null && nextId != activeConnectionId)
+            || (nextFileId != null && nextFileId != activeFileConnectionId);
+        setState(() { activeConnectionId = nextId; activeFileConnectionId = nextFileId; });
+        if (started) {
           await windowManager.setAlwaysOnTop(false);
           await windowManager.minimize();
         }
@@ -220,9 +227,14 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
   @override
   Widget build(BuildContext context) {
     final clients = widget.model.clients.where((client) => !client.disconnected).toList();
-    final Client? client = clients.isEmpty ? null : clients.first;
-    final active = client != null && activeConnectionId == client.id;
-    return OclicFrame(status: closing ? 'Arrêt en cours' : active ? 'En cours' : 'Demande reçue', onClose: stop,
+    final pending = clients.where((client) => client.isFileTransfer
+        ? activeFileConnectionId != client.id : activeConnectionId != client.id);
+    final screens = clients.where((client) => !client.isFileTransfer);
+    final Client? client = pending.isNotEmpty ? pending.first
+        : screens.isNotEmpty ? screens.first : clients.isEmpty ? null : clients.first;
+    final files = client?.isFileTransfer == true;
+    final active = client != null && (files ? activeFileConnectionId : activeConnectionId) == client.id;
+    return OclicFrame(status: closing ? 'Arrêt en cours' : active ? (files ? 'Fichiers autorisés' : 'En cours') : 'Demande reçue', onClose: stop,
       actions: Column(children: [
         if (error.isNotEmpty) Text(error, style: const TextStyle(color: oclicInk)),
         if (!active && client != null) ...[
@@ -230,19 +242,23 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
             setState(() { approving = client.id; });
             // The native Login event, not this click, changes the authorized state.
             await bind.cmLoginRes(connId: client.id, res: true);
-          }), child: Text(approving == client.id ? 'Connexion…' : 'Autoriser')),
+          }), child: Text(approving == client.id ? 'Connexion…' : files ? 'Autoriser le transfert' : 'Autoriser')),
           TextButton(onPressed: closing ? null : () async { await bind.cmLoginRes(connId: client.id, res: false); }, child: const Text('Refuser')),
         ] else ElevatedButton(onPressed: closing ? null : stop, child: Text(closing ? 'Déconnexion…' : 'Arrêter la session')),
-        if (active && client != null && widget.model.showElevation)
+        if (active && !files && client != null && widget.model.showElevation)
           TextButton(onPressed: () => checkClickTime(client.id, () async {
             await bind.cmElevatePortable(connId: client.id);
           }), child: const Text('Autoriser les actions administrateur')),
       ]),
       child: Column(children: [
-        Icon(active ? Icons.check_circle_outline : Icons.desktop_access_disabled_outlined, size: 48, color: oclicInk),
-        const SizedBox(height: 20), oclicTitle(active ? 'Le technicien intervient' : 'Autoriser l’assistance ?'),
+        Icon(files ? Icons.folder_outlined : active ? Icons.check_circle_outline : Icons.desktop_access_disabled_outlined, size: 48, color: oclicInk),
+        const SizedBox(height: 20), oclicTitle(files
+            ? active ? 'Transfert de fichiers autorisé' : 'Autoriser le transfert de fichiers ?'
+            : active ? 'Le technicien intervient' : 'Autoriser l’assistance ?'),
         const SizedBox(height: 12),
-        Text(active ? 'Écran, clavier et souris partagés.' : 'Vérifiez cet identifiant avec Oclic.', textAlign: TextAlign.center,
+        Text(files ? 'Le technicien pourra envoyer et récupérer des fichiers.'
+            : active ? 'Écran, clavier, souris et transfert de fichiers.'
+            : 'Écran, clavier, souris et fichiers. Vérifiez cet identifiant avec Oclic.', textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 14, color: oclicInk)),
         const SizedBox(height: 24), oclicIdentity('Identifiant du poste distant', client?.peerId ?? ''),
       ]));

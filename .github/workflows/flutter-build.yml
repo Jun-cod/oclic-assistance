@@ -129,6 +129,9 @@ jobs:
     - name: Check Oclic UI
       run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
       working-directory: flutter
+    - name: Test Oclic windows and file-transfer authorization
+      run: flutter test --no-pub test/oclic_window_test.dart
+      working-directory: flutter
     - name: Patch RustDesk sources for Flutter 3.44 (arm64)
       if: ${{ matrix.job.arch == 'aarch64' }}
       shell: bash

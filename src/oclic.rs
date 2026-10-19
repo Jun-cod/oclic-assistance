@@ -22,7 +22,7 @@ pub fn configure() {
         ("approve-mode", "click"),
         ("enable-keyboard", "Y"),
         ("enable-clipboard", "N"),
-        ("enable-file-transfer", "N"),
+        ("enable-file-transfer", "Y"),
         ("enable-file-copy-paste", "N"),
         ("enable-audio", "N"),
         ("enable-camera", "N"),
@@ -57,6 +57,10 @@ pub fn shutdown() -> bool {
     }
 }
 
+pub fn can_pair_channels(peer_id: &str, file_transfer: bool, other_peer_id: &str, other_file_transfer: bool) -> bool {
+    peer_id == other_peer_id && file_transfer != other_file_transfer
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -66,8 +70,18 @@ mod tests {
         assert_eq!(hbb_common::config::Config::get_option("approve-mode"), "click");
         assert!(hbb_common::config::is_incoming_only());
         assert!(hbb_common::config::is_disable_installation());
-        for key in ["enable-file-transfer", "enable-clipboard", "enable-terminal", "enable-tunnel", "enable-privacy-mode", "enable-block-input"] {
+        assert_eq!(hbb_common::config::Config::get_option("enable-file-transfer"), "Y");
+        for key in ["enable-clipboard", "enable-terminal", "enable-tunnel", "enable-privacy-mode", "enable-block-input"] {
             assert_eq!(hbb_common::config::Config::get_option(key), "N");
         }
+    }
+
+    #[test]
+    fn file_transfer_can_accompany_only_the_same_technician() {
+        assert!(super::can_pair_channels("technician", true, "technician", false));
+        assert!(super::can_pair_channels("technician", false, "technician", true));
+        assert!(!super::can_pair_channels("other", true, "technician", false));
+        assert!(!super::can_pair_channels("technician", false, "technician", false));
+        assert!(!super::can_pair_channels("technician", true, "technician", true));
     }
 }

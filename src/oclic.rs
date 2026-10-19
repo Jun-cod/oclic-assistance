@@ -45,27 +45,14 @@ pub fn configure() {
     }
 }
 
-pub async fn shutdown() -> bool {
-    let mut stream = match crate::ipc::connect(1000, "").await {
-        Ok(stream) => stream,
+pub fn shutdown() -> bool {
+    match crate::ipc::set_data(&crate::ipc::Data::Close) {
+        Ok(()) => true,
         Err(error) => {
-            log::error!("Oclic could not contact its engine for shutdown: {}", error);
-            return false;
-        }
-    };
-    if let Err(error) = stream.send(&crate::ipc::Data::Close).await {
-        log::error!("Oclic could not send shutdown: {}", error);
-        return false;
-    }
-    drop(stream);
-    for _ in 0..30 {
-        hbb_common::tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        if crate::ipc::connect(100, "").await.is_err() {
-            return true;
+            log::error!("Oclic could not send shutdown: {}", error);
+            false
         }
     }
-    log::error!("Oclic shutdown was not acknowledged");
-    false
 }
 
 #[cfg(test)]

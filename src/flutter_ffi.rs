@@ -3058,9 +3058,9 @@ pub mod server_side {
 }
 
 /// Shut down the Oclic engine, including all incoming sessions.
-pub async fn main_oclic_shutdown() -> bool {
+pub fn main_oclic_shutdown() -> bool {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    { crate::oclic::shutdown().await }
+    { crate::oclic::shutdown() }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     { false }
 }

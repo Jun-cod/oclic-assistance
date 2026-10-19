@@ -129,18 +129,6 @@ jobs:
     - name: Check Oclic UI
       run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
       working-directory: flutter
-    - name: Resolve Oclic Flutter dependencies
-      run: flutter pub get
-      working-directory: flutter
-    - name: Check Oclic UI
-      run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
-      working-directory: flutter
-    - name: Resolve Oclic Flutter dependencies
-      run: flutter pub get
-      working-directory: flutter
-    - name: Check Oclic UI
-      run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart
-      working-directory: flutter
     - name: Patch RustDesk sources for Flutter 3.44 (arm64)
       if: ${{ matrix.job.arch == 'aarch64' }}
       shell: bash
@@ -154,6 +142,7 @@ jobs:
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
       with:
         prefix-key: ${{ matrix.job.os }}
+        cache-on-failure: true
     - name: Setup vcpkg with Github Actions binary cache
       uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
       with:

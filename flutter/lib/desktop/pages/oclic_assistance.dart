@@ -16,6 +16,12 @@ const oclicSun = Color(0xffffd33f);
 
 bool get isOclic => bind.mainGetAppNameSync() == 'OclicAssistance';
 
+int? oclicActiveConnectionId(int? requestedId, int streamCount, List<dynamic> nativeClients) {
+  if (requestedId == null || streamCount < 1) return null;
+  return nativeClients.any((client) => client is Map && client['id'] == requestedId
+      && client['authorized'] == true && client['disconnected'] != true) ? requestedId : null;
+}
+
 class OclicLogo extends StatelessWidget {
   const OclicLogo({super.key});
   @override
@@ -51,6 +57,8 @@ class OclicFrame extends StatelessWidget {
         Expanded(child: GestureDetector(onPanStart: (_) => windowManager.startDragging(),
           behavior: HitTestBehavior.opaque, child: const Padding(padding: EdgeInsets.only(left: 16),
             child: Text('Oclic Assistance', style: TextStyle(color: oclicInk, fontSize: 12))))),
+        IconButton(tooltip: 'Réduire', icon: const Icon(Icons.minimize, size: 18, color: oclicInk),
+          onPressed: () => windowManager.minimize()),
         IconButton(tooltip: 'Fermer l’outil', icon: const Icon(Icons.close, size: 18, color: oclicInk), onPressed: onClose),
       ])),
       const Divider(height: 1, color: oclicInk),
@@ -69,7 +77,7 @@ class OclicFrame extends StatelessWidget {
           const Text('BAOU TECHNOLOGIE', style: TextStyle(fontSize: 10, color: oclicInk)),
           TextButton(onPressed: () => showDialog<void>(context: context, builder: (context) => AlertDialog(
             title: const Text('Oclic Assistance'),
-            content: const Text('Version 0.1.0 · RustDesk 1.5.0\nLogiciel libre, licence AGPL-3.0.\nSources : github.com/Jun-cod/oclic-assistance'),
+            content: const Text('Version 0.1.1 · RustDesk 1.5.0\nLogiciel libre, licence AGPL-3.0.\nSources : github.com/Jun-cod/oclic-assistance'),
             actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))])),
             child: const Text('À propos', style: TextStyle(fontSize: 12))),
         ]),
@@ -97,7 +105,7 @@ class OclicMainWindow extends StatefulWidget {
 class _OclicMainWindowState extends State<OclicMainWindow> with WindowListener {
   Timer? timer;
   String id = '', error = '';
-  bool online = false, closing = false, fetching = false;
+  bool online = false, closing = false, fetching = false, sessionActive = false;
   @override
   void initState() {
     super.initState();
@@ -116,9 +124,12 @@ class _OclicMainWindowState extends State<OclicMainWindow> with WindowListener {
       final nextId = await bind.mainGetMyId();
       final data = jsonDecode(await bind.mainGetConnectStatus()) as Map<String, dynamic>;
       final nextOnline = (data['status_num'] as num? ?? 0) > 0;
+      final nextActive = (data['video_conn_count'] as num? ?? 0) > 0;
       final nextError = await bind.mainGetError();
-      if (mounted && (id != nextId || online != nextOnline || error != nextError)) {
-        setState(() { id = nextId; online = nextOnline; error = nextError; });
+      if (mounted && (id != nextId || online != nextOnline || error != nextError || sessionActive != nextActive)) {
+        final minimize = nextActive && !sessionActive;
+        setState(() { id = nextId; online = nextOnline; error = nextError; sessionActive = nextActive; });
+        if (minimize) await windowManager.minimize();
       }
     } catch (_) {
       if (mounted) setState(() { online = false; error = 'Connexion indisponible.'; });
@@ -139,7 +150,7 @@ class _OclicMainWindowState extends State<OclicMainWindow> with WindowListener {
   @override
   void dispose() { timer?.cancel(); windowManager.removeListener(this); super.dispose(); }
   @override
-  Widget build(BuildContext context) => OclicFrame(status: closing ? 'Arrêt en cours' : online ? 'Prêt' : 'Connexion…', onClose: quit,
+  Widget build(BuildContext context) => OclicFrame(status: closing ? 'Arrêt en cours' : sessionActive ? 'En cours' : online ? 'Prêt' : 'Connexion…', onClose: quit,
     actions: ElevatedButton(onPressed: closing ? null : quit, child: Text(closing ? 'Déconnexion…' : 'Arrêter l’assistance')),
     child: Column(children: [
       const Icon(Icons.desktop_windows_outlined, size: 48, color: oclicInk), const SizedBox(height: 20),
@@ -160,15 +171,43 @@ class OclicConnectionPanel extends StatefulWidget {
 }
 
 class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
+  Timer? timer;
   int? approving;
-  bool closing = false;
+  int? activeConnectionId;
+  bool closing = false, fetching = false;
   String error = '';
   @override
   void initState() {
     super.initState();
     windowManager.setSize(const Size(480, 640));
     windowManager.setMinimumSize(const Size(360, 540));
+    windowManager.setAlwaysOnTop(false);
+    bind.mainCheckConnectStatus();
+    refresh();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
   }
+  Future<void> refresh() async {
+    if (fetching || closing) return;
+    fetching = true;
+    try {
+      final nativeClients = jsonDecode(await bind.cmGetClientsState()) as List<dynamic>;
+      final status = jsonDecode(await bind.mainGetConnectStatus()) as Map<String, dynamic>;
+      final clients = widget.model.clients.where((client) => !client.disconnected);
+      final id = clients.isEmpty ? null : clients.first.id;
+      final nextId = oclicActiveConnectionId(id, (status['video_conn_count'] as num? ?? 0).toInt(), nativeClients);
+      if (mounted && nextId != activeConnectionId) {
+        setState(() { activeConnectionId = nextId; });
+        if (nextId != null) {
+          await windowManager.setAlwaysOnTop(false);
+          await windowManager.minimize();
+        }
+      }
+    } catch (_) {
+      if (mounted && error.isEmpty) setState(() { error = 'État de session indisponible.'; });
+    } finally { fetching = false; }
+  }
+  @override
+  void dispose() { timer?.cancel(); super.dispose(); }
   Future<void> stop() async {
     if (closing) return;
     setState(() { closing = true; });
@@ -182,7 +221,7 @@ class _OclicConnectionPanelState extends State<OclicConnectionPanel> {
   Widget build(BuildContext context) {
     final clients = widget.model.clients.where((client) => !client.disconnected).toList();
     final Client? client = clients.isEmpty ? null : clients.first;
-    final active = client?.authorized ?? false;
+    final active = client != null && activeConnectionId == client.id;
     return OclicFrame(status: closing ? 'Arrêt en cours' : active ? 'En cours' : 'Demande reçue', onClose: stop,
       actions: Column(children: [
         if (error.isNotEmpty) Text(error, style: const TextStyle(color: oclicInk)),

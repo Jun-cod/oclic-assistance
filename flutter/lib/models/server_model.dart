@@ -558,6 +558,10 @@ class ServerModel with ChangeNotifier {
       }
       if (desktopType == DesktopType.cm && !hideCm) {
         showCmWindow();
+        if (bind.mainGetAppNameSync() == 'OclicAssistance' && !client.authorized) {
+          windowManager.restore();
+          windowManager.focus();
+        }
       }
       scrollToBottom();
       notifyListeners();
@@ -576,7 +580,7 @@ class ServerModel with ChangeNotifier {
         onTap: () {},
         page: desktop.buildConnectionCard(client)));
     Future.delayed(Duration.zero, () async {
-      if (!hideCm) windowOnTop(null);
+      if (!hideCm && bind.mainGetAppNameSync() != 'OclicAssistance') windowOnTop(null);
     });
     // Only do the hidden task when on Desktop.
     if (client.authorized && isDesktop && bind.mainGetAppNameSync() != 'OclicAssistance') {

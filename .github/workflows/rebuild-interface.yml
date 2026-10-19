@@ -1,0 +1,132 @@
+name: Rebuild Oclic Windows interface
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: oclic-interface-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  FLUTTER_VERSION: 3.24.5
+  NATIVE_BASE_COMMIT: ec617e2c4346280340559d4f41709579688aa63b
+  NATIVE_BASE_RUN: '39183882043'
+  NATIVE_BASE_SHA256: b0a17fff6cfd09bbfe45fdabc0a9ac263d9b04fbd35cd4f2430ad07237c3774d
+  NATIVE_DLL_SHA256: 8a7ebcef2fc92c40e10ef8894d85506b1b9a5da4bbe83258f4be9e19ef6189bd
+jobs:
+  windows-interface:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Oclic source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+      - name: Require unchanged native engine and bridge API
+        shell: pwsh
+        run: |
+          git fetch --depth=1 origin $env:NATIVE_BASE_COMMIT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code $env:NATIVE_BASE_COMMIT HEAD -- src libs Cargo.toml Cargo.lock build.rs res
+          if ($LASTEXITCODE -ne 0) { throw 'Native source changed: use the complete Windows build.' }
+      - name: Download verified native release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: Oclic-Assistance-Windows-x64
+          path: native-base
+          run-id: ${{ env.NATIVE_BASE_RUN }}
+          github-token: ${{ github.token }}
+      - name: Extract and verify existing native engine
+        shell: pwsh
+        run: |
+          $baseExe = (Resolve-Path native-base/Oclic-Assistance.exe).Path
+          if ((Get-FileHash $baseExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:NATIVE_BASE_SHA256) { throw 'Native release checksum mismatch' }
+          if ((Get-Content native-base/SOURCE-COMMIT.txt -Raw).Trim() -ne $env:NATIVE_BASE_COMMIT) { throw 'Native source mismatch' }
+          $process = Start-Process -FilePath $baseExe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput native-base/version.txt
+          if ($process.ExitCode -ne 0) { throw 'Native extraction failed' }
+          $bundle = Join-Path $env:LOCALAPPDATA 'oclicassistance'
+          $dll = Join-Path $bundle 'librustdesk.dll'
+          if ((Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:NATIVE_DLL_SHA256) { throw 'Native library mismatch' }
+          New-Item -ItemType Directory target/release -Force | Out-Null
+          Copy-Item -LiteralPath $dll -Destination target/release/librustdesk.dll
+          New-Item -ItemType Directory rustdesk -Force | Out-Null
+          Copy-Item -Path "$bundle/*" -Destination rustdesk -Recurse
+      - name: Restore matching bridge files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: bridge-artifact
+          path: ./
+          run-id: ${{ env.NATIVE_BASE_RUN }}
+          github-token: ${{ github.token }}
+      - name: Install Flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+          cache: true
+      - name: Restore the matching RustDesk Flutter engine
+        shell: pwsh
+        run: |
+          flutter precache --windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive windows-x64-release.zip -DestinationPath windows-x64-release
+          $runtime = Join-Path $env:LOCALAPPDATA 'oclicassistance/flutter_windows.dll'
+          if ((Get-FileHash windows-x64-release/flutter_windows.dll).Hash -ne (Get-FileHash $runtime).Hash) { throw 'Flutter runtime changed from the verified native release' }
+          $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+          Copy-Item -Path windows-x64-release/* -Destination "$flutterRoot/bin/cache/artifacts/engine/windows-x64-release" -Recurse -Force
+      - name: Patch Flutter dropdown behavior
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff "$(dirname "$(dirname "$(which flutter)")")"
+          cd "$(dirname "$(dirname "$(which flutter)")")"
+          git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - name: Resolve Flutter packages
+        working-directory: flutter
+        run: flutter pub get
+      - name: Check window changes
+        working-directory: flutter
+        run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/desktop/pages/oclic_assistance.dart lib/main.dart lib/models/server_model.dart test/oclic_window_test.dart
+      - name: Test minimize controls and native session state
+        working-directory: flutter
+        run: flutter test --no-pub test/oclic_window_test.dart
+      - name: Build Windows interface
+        working-directory: flutter
+        run: flutter build windows --release
+      - name: Assemble the updated portable bundle
+        shell: pwsh
+        run: |
+          Copy-Item -Path flutter/build/windows/x64/runner/Release/* -Destination rustdesk -Recurse -Force
+          $runner = Join-Path (Get-Location) 'rustdesk/OclicAssistance.exe'
+          if (!(Resolve-Path $runner).Path.StartsWith((Join-Path (Get-Location) 'rustdesk'))) { throw 'Invalid portable runner path' }
+          Remove-Item -LiteralPath $runner
+          Move-Item -LiteralPath rustdesk/rustdesk.exe -Destination $runner
+          Copy-Item LICENCE,OCLIC-BUILD.md,OFL-Fredoka.txt,OFL-Nunito.txt -Destination rustdesk
+          if ((Get-FileHash rustdesk/librustdesk.dll).Hash.ToLowerInvariant() -ne $env:NATIVE_DLL_SHA256) { throw 'Native engine unexpectedly changed' }
+      - name: Install portable packer toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: '1.75'
+      - name: Build portable executable
+        shell: bash
+        run: |
+          set -e
+          pushd libs/portable
+          pip3 install -r requirements.txt
+          python3 generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/OclicAssistance.exe
+          popd
+          mkdir -p SignOutput
+          cp target/release/rustdesk-portable-packer.exe SignOutput/Oclic-Assistance.exe
+          cp LICENCE OCLIC-BUILD.md OFL-Fredoka.txt OFL-Nunito.txt SignOutput/
+          (cd SignOutput && sha256sum Oclic-Assistance.exe > SHA256SUMS)
+          git rev-parse HEAD > SignOutput/SOURCE-COMMIT.txt
+          printf '%s\n' "$NATIVE_BASE_COMMIT" > SignOutput/NATIVE-BASE-COMMIT.txt
+          printf '%s\n' "$NATIVE_DLL_SHA256" > SignOutput/NATIVE-DLL-SHA256.txt
+      - name: Upload Oclic Assistance executable
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: Oclic-Assistance-Windows-x64
+          path: SignOutput/
+          if-no-files-found: error
+          retention-days: 14

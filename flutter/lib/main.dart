@@ -306,7 +306,8 @@ bool _isCmReadyToShow = false;
 showCmWindow({bool isStartup = false}) async {
   if (isStartup) {
     WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
-        size: kConnectionManagerWindowSizeClosedChat, alwaysOnTop: true);
+        size: kConnectionManagerWindowSizeClosedChat,
+        alwaysOnTop: bind.mainGetAppNameSync() != 'OclicAssistance');
     await windowManager.waitUntilReadyToShow(windowOptions, null);
     bind.mainHideDock();
     await Future.wait([
@@ -320,6 +321,13 @@ showCmWindow({bool isStartup = false}) async {
     _isCmReadyToShow = true;
   } else if (_isCmReadyToShow) {
     if (await windowManager.getOpacity() != 1) {
+      if (bind.mainGetAppNameSync() == 'OclicAssistance') {
+        await windowManager.setOpacity(1);
+        await windowManager.setAlwaysOnTop(false);
+        await windowManager.restore();
+        await windowManager.focus();
+        return;
+      }
       await windowManager.setOpacity(1);
       await windowManager.focus();
       await windowManager.minimize(); //needed
